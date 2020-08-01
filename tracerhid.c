@@ -7,9 +7,12 @@
 #include <linux/uaccess.h>
 #include <linux/string.h>
 
+#include "kallsyms.h"
+
 MODULE_DESCRIPTION("");
 MODULE_AUTHOR("");
 MODULE_LICENSE("GPL");
+MODULE_INFO(livepatch, "Y");
 
 #define log_print(fmt, ...) printk( (KBUILD_MODNAME ": "fmt), ##__VA_ARGS__ );
 
@@ -104,23 +107,18 @@ static asmlinkage int hooked_proc_pid_status(struct seq_file *m, struct pid_name
     return ret;
 }
 
-/* Search for a symbol in kallsyms. Some contain version specific suffixes */
-static int on_each_symbol(void *data, const char *name,
-                                      struct module *module, unsigned long address)
-{
-    if( strstr( name, "proc_pid_status" ) != NULL ){
-        proc_pid_status_hook.name = name;
-        proc_pid_status_hook.address = address;
-        return 1; // non-zero stops iteration.
-    }
-
-    return 0;
-}
 static int cart_startup(void)
 {
     int ret = 0;
 
-    if( !kallsyms_on_each_symbol( on_each_symbol, "proc_pid_status" ) ){
+    if( init_kallsyms() ){
+        log_print( "Error initing kallsyms hack.\n" );
+        return -EAGAIN;
+    }
+    proc_pid_status_hook.name = "proc_pid_status";
+    proc_pid_status_hook.address = kallsyms_lookup_name( "proc_pid_status" );
+
+    if( !proc_pid_status_hook.address ){
         log_print( "Error iterating through modules!\n" );
         return -EAGAIN;
     }
