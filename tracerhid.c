@@ -85,7 +85,7 @@ static asmlinkage int hooked_proc_pid_status(struct seq_file *m, struct pid_name
     unsigned int backup_ptrace;
 
     if( task->mm ){
-        down_read(&task->mm->mmap_sem);
+        mmap_read_lock(task->mm);
         if (task->mm->exe_file) {
             pathname = kmalloc(PATH_MAX, GFP_ATOMIC);
             if (pathname) {
@@ -95,7 +95,7 @@ static asmlinkage int hooked_proc_pid_status(struct seq_file *m, struct pid_name
                 kfree(pathname);
             }
         }
-        up_read(&task->mm->mmap_sem);
+        mmap_read_unlock(task->mm);
     }
     if( !more_info ){
         log_print("Hiding TracerPid on Process(%d)", task->pid);
