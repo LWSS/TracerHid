@@ -6,6 +6,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/string.h>
+#include <linux/version.h>
 
 #include "kallsyms.h"
 
@@ -67,6 +68,14 @@ static void notrace ftrace_thunk(unsigned long ip, unsigned long parent_ip,
     if (!within_module(parent_ip, THIS_MODULE))
         regs->ip = (unsigned long) hook->function;
 #endif
+}
+
+static inline void notrace ftrace_thunk_ftregs(unsigned long ip, unsigned long parent_ip,
+                                                struct ftrace_ops *ops, struct ftrace_regs *regs)
+{
+    struct pt_regs *old_regs = ftrace_get_regs(regs);
+
+    ftrace_thunk(ip, parent_ip, ops, old_regs);
 }
 
 static asmlinkage int (* orig_proc_pid_status)(struct seq_file *m, struct pid_namespace *ns,
@@ -131,10 +140,17 @@ static int cart_startup(void)
     proc_pid_status_hook.original = &orig_proc_pid_status;
     init_hook( &proc_pid_status_hook );
 
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0)
     proc_pid_status_hook.ops.func = ftrace_thunk;
+    #else
+    proc_pid_status_hook.ops.func = ftrace_thunk_ftregs;
+    #endif
+
     proc_pid_status_hook.ops.flags = FTRACE_OPS_FL_SAVE_REGS
-                                  | FTRACE_OPS_FL_RECURSION_SAFE
                                   | FTRACE_OPS_FL_IPMODIFY;
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0)
+    proc_pid_status_hook.ops.flags |= FTRACE_OPS_FL_RECURSION_SAFE;
+    #endif
 
     ret = ftrace_set_filter_ip(&proc_pid_status_hook.ops, proc_pid_status_hook.address, 0, 0);
     if( ret ){
